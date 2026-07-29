@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Run the public SSOT guard."""
+"""Produce a compact SSOT governance report."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 
@@ -23,7 +24,9 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(args.root).resolve()
     findings = scan(root, args.registry)
     payload = {
-        "errors": len(findings),
+        "root": str(root),
+        "finding_count": len(findings),
+        "by_code": dict(Counter(item.code for item in findings)),
         "findings": [
             {
                 **asdict(item),
@@ -35,12 +38,12 @@ def main(argv: list[str] | None = None) -> int:
     }
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
-    elif findings:
-        print(f"SSOT guard: {len(findings)} finding(s)")
-        for item in findings:
-            print(f"[ERROR] {item.rule_id}: {item.message} ({item.path.relative_to(root)}; source={item.source.relative_to(root)})")
     else:
-        print("SSOT guard: clean")
+        print(f"SSOT report: {payload['finding_count']} finding(s)")
+        for code, count in sorted(payload["by_code"].items()):
+            print(f"  {code}: {count}")
+        for item in payload["findings"]:
+            print(f"  - {item['code']}: {item['path']}")
     return 1 if findings else 0
 
 

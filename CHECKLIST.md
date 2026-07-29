@@ -19,6 +19,10 @@ Run this checklist before giving the repository URL to the owner for public GitH
 - [ ] `.gitignore` excludes secrets, local manifests, caches, and build output.
 - [ ] Tests pass with `python -m unittest discover -s tests -v`.
 - [ ] `python scripts/ssot-guard.py --registry config/ssot-registry.json` exits cleanly.
+- [ ] `python scripts/ssot-report.py --registry config/ssot-registry.json` reports zero findings.
+- [ ] Every applied copy is represented by a `.ssot/copy-manifest.json` with source and destination hashes.
+- [ ] `reference` and `bridge` modes are not implemented as raw file copies.
+- [ ] `git config core.hooksPath .githooks` is enabled for local commits.
 
 ## GitHub handoff
 

@@ -1,14 +1,26 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "canonical_roots": {
     "shared_code": "canonical/shared",
     "templates": "canonical/templates",
     "documentation": "canonical/docs"
   },
   "target_roots": ["projects"],
+  "project_roots": ["projects/*"],
   "bootstrap_sources": ["canonical/templates"],
   "archive_roots": ["backups", "audits"],
   "generated_subpaths": ["build/data", "build/temp"],
+  "manifest": {
+    "directory": ".ssot",
+    "filename": "copy-manifest.json",
+    "require_source_hash": true,
+    "require_destination_hash": true
+  },
+  "scan": {
+    "skip_directories": [".git", ".venv", "node_modules", "__pycache__", ".ssot"],
+    "fail_on_manifest_drift": true,
+    "fail_on_exact_copies": true
+  },
   "guard_rules": [
     {
       "id": "shared-code-copy",

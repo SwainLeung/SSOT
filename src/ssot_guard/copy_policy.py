@@ -1,12 +1,13 @@
-"""Dry-run-first bootstrap copy with provenance recording."""
+"""Dry-run-first execution of SSOT-approved copy modes."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
+
+from .hashing import tree_hash
 
 
 class CopyPolicyError(RuntimeError):
@@ -21,48 +22,114 @@ def _inside(path: Path, parent: Path) -> bool:
         return False
 
 
-def _tree_hash(path: Path) -> str:
-    digest = hashlib.sha256()
-    files = [path] if path.is_file() else sorted(item for item in path.rglob("*") if item.is_file())
-    for item in files:
-        relative = item.name if path.is_file() else item.relative_to(path).as_posix()
-        digest.update(relative.encode("utf-8"))
-        digest.update(item.read_bytes())
-    return digest.hexdigest()
+def _roots(base: Path, values: list[str]) -> list[Path]:
+    return [(base / value).resolve() for value in values]
 
 
-def bootstrap(source: str | Path, destination: str | Path, root: str | Path, registry: dict, apply: bool = False) -> dict:
+def _project_for(path: Path, base: Path, registry: dict) -> Path | None:
+    for pattern in registry.get("target_roots", []):
+        target_root = (base / str(pattern)).resolve()
+        if not _inside(path, target_root):
+            continue
+        relative = path.relative_to(target_root)
+        if relative.parts:
+            return target_root / relative.parts[0]
+    projects = []
+    for pattern in registry.get("project_roots", []):
+        projects.extend(item for item in base.glob(str(pattern)) if item.is_dir())
+    candidates = [item.resolve() for item in projects if _inside(path, item)]
+    return max(candidates, key=lambda item: len(item.parts), default=None)
+
+
+def _manifest_path(owner: Path, registry: dict) -> Path:
+    manifest = registry.get("manifest", {})
+    return owner / str(manifest.get("directory", ".ssot")) / str(manifest.get("filename", "copy-manifest.json"))
+
+
+def _record(mode: str, source: Path, destination: Path, base: Path) -> dict:
+    return {
+        "mode": mode,
+        "source": source.relative_to(base).as_posix(),
+        "destination": destination.relative_to(base).as_posix(),
+        "source_sha256": tree_hash(source),
+        "destination_sha256": tree_hash(destination),
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
+def _append_manifest(owner: Path, registry: dict, record: dict) -> str:
+    manifest_path = _manifest_path(owner, registry)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    value = {"schema_version": 1, "entries": []}
+    if manifest_path.is_file():
+        value = json.loads(manifest_path.read_text(encoding="utf-8"))
+    value.setdefault("entries", []).append(record)
+    manifest_path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return str(manifest_path)
+
+
+def _copy(source: Path, destination: Path) -> None:
+    if source.is_dir():
+        shutil.copytree(source, destination)
+    else:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
+
+def execute(mode: str, source: str | Path, destination: str | Path, root: str | Path, registry: dict, apply: bool = False) -> dict:
     base = Path(root).resolve()
     source_path = Path(source).resolve()
     destination_path = Path(destination).resolve()
-    allowed_sources = [base / item for item in registry.get("bootstrap_sources", [])]
-    if not any(_inside(source_path, candidate) for candidate in allowed_sources):
-        raise CopyPolicyError("source is outside the configured bootstrap sources")
-    target_roots = [base / item for item in registry.get("target_roots", [])]
-    target_root = next((item for item in target_roots if _inside(destination_path, item)), None)
-    if target_root is None:
-        raise CopyPolicyError("destination is outside the configured target roots")
+    if mode == "reference":
+        raise CopyPolicyError("reference mode forbids copying; import or call the canonical source")
+    if not source_path.exists():
+        raise CopyPolicyError("source does not exist")
     if destination_path.exists():
         raise CopyPolicyError(f"destination already exists: {destination_path}")
-    record = {
-        "mode": "bootstrap",
+
+    if mode == "bootstrap":
+        allowed_sources = _roots(base, registry.get("bootstrap_sources", []))
+        if not any(_inside(source_path, item) for item in allowed_sources):
+            raise CopyPolicyError("bootstrap source is outside configured bootstrap_sources")
+        owner = _project_for(destination_path, base, registry)
+        if owner is None:
+            raise CopyPolicyError("bootstrap destination is outside configured project_roots")
+    elif mode == "generated":
+        owner = _project_for(destination_path, base, registry)
+        if owner is None or not owner.is_dir():
+            raise CopyPolicyError("generated destination is outside configured project_roots")
+        allowed = [owner / item for item in registry.get("generated_subpaths", [])]
+        if not any(_inside(destination_path, item) for item in allowed):
+            raise CopyPolicyError("generated destination is outside generated_subpaths")
+        if not _inside(source_path, base):
+            raise CopyPolicyError("generated source must remain inside the repository root")
+    elif mode == "archive":
+        allowed_archives = _roots(base, registry.get("archive_roots", []))
+        owner = next((item for item in allowed_archives if _inside(destination_path, item)), None)
+        if owner is None:
+            raise CopyPolicyError("archive destination is outside archive_roots")
+        if not _inside(source_path, base):
+            raise CopyPolicyError("archive source must remain inside the repository root")
+    elif mode == "bridge":
+        raise CopyPolicyError("bridge mode requires a language-specific adapter; use import/run bridge code, not a file copy")
+    else:
+        raise CopyPolicyError(f"unsupported copy mode: {mode}")
+
+    preview = {
+        "applied": False,
+        "mode": mode,
         "source": source_path.relative_to(base).as_posix(),
         "destination": destination_path.relative_to(base).as_posix(),
-        "source_sha256": _tree_hash(source_path),
-        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     if not apply:
-        return {"applied": False, **record}
-    if source_path.is_dir():
-        shutil.copytree(source_path, destination_path)
-    else:
-        destination_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, destination_path)
-    manifest_path = destination_path / ".ssot/copy-manifest.json" if destination_path.is_dir() else target_root / ".ssot/copy-manifest.json"
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest = {"schema_version": 1, "entries": []}
-    if manifest_path.is_file():
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest.setdefault("entries", []).append(record)
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return {"applied": True, **record, "manifest": manifest_path.relative_to(base).as_posix()}
+        return preview
+    _copy(source_path, destination_path)
+    record = _record(mode, source_path, destination_path, base)
+    preview.update({"applied": True, **record, "manifest": _append_manifest(owner, registry, record)})
+    return preview
+
+
+def bootstrap(source: str | Path, destination: str | Path, root: str | Path, registry: dict, apply: bool = False) -> dict:
+    """Backward-compatible bootstrap helper."""
+
+    return execute("bootstrap", source, destination, root, registry, apply=apply)

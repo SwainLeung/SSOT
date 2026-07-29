@@ -10,12 +10,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from ssot_guard.copy_policy import CopyPolicyError, bootstrap  # noqa: E402
+from ssot_guard.copy_policy import CopyPolicyError, execute  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["bootstrap"], default="bootstrap")
+    parser.add_argument("--mode", choices=["reference", "bootstrap", "generated", "archive", "bridge"], default="bootstrap")
     parser.add_argument("--source", required=True)
     parser.add_argument("--destination", required=True)
     parser.add_argument("--root", default=str(ROOT))
@@ -31,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     if not destination.is_absolute():
         destination = root / destination
     try:
-        result = bootstrap(source, destination, root, registry, apply=args.apply)
+        result = execute(args.mode, source, destination, root, registry, apply=args.apply)
     except (OSError, ValueError, CopyPolicyError) as exc:
         print(f"SSOT copy blocked: {exc}")
         return 1

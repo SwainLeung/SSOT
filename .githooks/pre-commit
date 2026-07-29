@@ -1,0 +1,4 @@
+#!/bin/sh
+ROOT="$(git rev-parse --show-toplevel)"
+python "$ROOT/scripts/ssot-guard.py" --registry "$ROOT/config/ssot-registry.json" || exit $?
+python -m unittest discover -s "$ROOT/tests" -v || exit $?

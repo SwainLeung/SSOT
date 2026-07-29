@@ -4,7 +4,9 @@ All notable changes to this public SSOT toolkit are documented here.
 
 ## [Unreleased]
 
-- Reserved for changes made after the initial public repository review.
+- Added complete copy-mode policy for reference, bootstrap, generated, bridge, and archive operations.
+- Added provenance manifest validation for source drift, destination drift, missing paths, and boundary violations.
+- Added governance report output and a versioned pre-commit hook.
 
 ## [0.1.0] - 2026-07-29
 
