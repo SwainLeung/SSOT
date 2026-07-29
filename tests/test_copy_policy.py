@@ -64,3 +64,19 @@ class CopyPolicyTests(unittest.TestCase):
             registry = {**self.registry(), "archive_roots": ["backups"]}
             result = execute("archive", source, root / "backups/run/input.txt", root, registry, apply=True)
             self.assertTrue(result["applied"])
+
+    def test_wildcard_target_root_is_supported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root / "example.com"
+            project.mkdir(parents=True)
+            source = root / "input.txt"
+            source.write_text("generated\n", encoding="utf-8")
+            registry = {
+                "target_roots": ["*.com"],
+                "generated_subpaths": ["build/data"],
+            }
+            destination = project / "build/data/output.txt"
+            (project / "build/data").mkdir(parents=True)
+            result = execute("generated", source, destination, root, registry, apply=True)
+            self.assertTrue(result["applied"])

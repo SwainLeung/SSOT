@@ -28,12 +28,20 @@ def _roots(base: Path, values: list[str]) -> list[Path]:
 
 def _project_for(path: Path, base: Path, registry: dict) -> Path | None:
     for pattern in registry.get("target_roots", []):
-        target_root = (base / str(pattern)).resolve()
-        if not _inside(path, target_root):
-            continue
-        relative = path.relative_to(target_root)
-        if relative.parts:
-            return target_root / relative.parts[0]
+        pattern_text = str(pattern)
+        matches = list(base.glob(pattern_text))
+        if not matches and not any(char in pattern_text for char in "*?["):
+            matches = [base / pattern_text]
+        for target_root in matches:
+            if any(char in pattern_text for char in "*[") and not target_root.is_dir():
+                continue
+            if not _inside(path, target_root):
+                continue
+            if any(char in pattern_text for char in "*?["):
+                return target_root.resolve()
+            relative = path.relative_to(target_root)
+            if relative.parts:
+                return (target_root / relative.parts[0]).resolve()
     projects = []
     for pattern in registry.get("project_roots", []):
         projects.extend(item for item in base.glob(str(pattern)) if item.is_dir())
