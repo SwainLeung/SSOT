@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local environments
+.venv/
+venv/
+.env
+.env.*
+
+# SSOT-generated provenance and local output
+.ssot/
+build/
+dist/
+*.manifest.json
+
+# Sensitive material
+credentials/
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+*.token
+*client_secret*
+*access_token*
+
+# Editors and OS files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "canonical_roots": {
+    "shared_code": "canonical/shared",
+    "templates": "canonical/templates",
+    "documentation": "canonical/docs"
+  },
+  "target_roots": ["projects"],
+  "bootstrap_sources": ["canonical/templates"],
+  "archive_roots": ["backups", "audits"],
+  "generated_subpaths": ["build/data", "build/temp"],
+  "guard_rules": [
+    {
+      "id": "shared-code-copy",
+      "source": "canonical/shared",
+      "patterns": ["*.py"],
+      "mode": "reference",
+      "message": "Shared code must be imported or bridged, not copied into a project."
+    },
+    {
+      "id": "shared-doc-copy",
+      "source": "canonical/docs",
+      "patterns": ["*.md"],
+      "mode": "reference",
+      "message": "Shared documentation must have one canonical owner."
+    }
+  ]
+}
